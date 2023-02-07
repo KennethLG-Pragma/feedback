@@ -1,0 +1,140 @@
+service: traveljournal
+frameworkVersion: '3'
+useDotenv: true
+
+provider:
+  apiName: api-traveljournal
+  name: aws
+  runtime: nodejs14.x
+  tags:
+    Environment: ${env:ENVIRONMENT}
+    Project: Travel Journal
+    Owner: david.tolosa@pragma.com.co
+    Department: Talent Pool
+  environment:
+    APP_SCRIPT_URL: ${env:APP_SCRIPT_URL}
+    API_KEY: ${env:API_KEY}
+    BITACORA_URL: ${env:BITACORA_URL}
+    BITACORA_AUTH_URL: ${env:BITACORA_AUTH_URL}
+    BITACORA_AUTHORIZATION: ${env:BITACORA_AUTHORIZATION}
+    CLIENT_ID: ${env:CLIENT_ID}
+    ID_COGNITO_GROUP: ${env:ID_COGNITO_GROUP}
+    SCOPE: ${env:SCOPE}
+    COMMENTS_TABLE: 'dynamodb-pragmaticoComment-${sls:stage}'
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - dynamodb:Scan
+        - dynamodb:Query
+        - dynamodb:GetItem
+        - dynamodb:PutItem
+        - dynamodb:UpdateItem
+        - dynamodb:DeleteItem
+        - dynamodb:BatchWriteItem
+      Resource:
+        'Fn::GetAtt': [pragmaticoComment, Arn]
+
+params:
+  default:
+    cognito_arn: arn:aws:cognito-idp:${aws:region}:${aws:accountId}:userpool/${env:ID_COGNITO_GROUP}
+
+resources:
+  Resources:
+    pragmaticoComment:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: dynamodb-pragmaticoComment-${sls:stage}
+        AttributeDefinitions:
+          - AttributeName: userEmail
+            AttributeType: S
+          - AttributeName: commentDate
+            AttributeType: S
+        KeySchema:
+          - AttributeName: userEmail
+            KeyType: HASH
+          - AttributeName: commentDate
+            KeyType: RANGE
+        BillingMode: PAY_PER_REQUEST
+
+functions:
+  getEvents:
+    name: lambda-traveljournal-getEvents
+    handler: src/functions/getEvents.handler
+    events:
+      - http:
+          path: /events
+          method: get
+          cors:
+            origin: '*'
+          authorizer:
+            arn: ${param:cognito_arn}
+  getUserInfo:
+    handler: src/functions/getUserInfo.handler
+    name: lambda-traveljournal-getUserInfo
+    events:
+      - http:
+          path: /me
+          method: get
+          cors:
+            origin: '*'
+          authorizer:
+            arn: ${param:cognito_arn}
+  getGroups:
+    handler: src/functions/getGroups.handler
+    name: lambda-traveljournal-getGroups
+    events:
+      - http:
+          path: /groups
+          method: get
+          cors:
+            origin: '*'
+          authorizer:
+            arn: ${param:cognito_arn}
+  getUsers:
+    name: lambda-traveljournal-getUsers
+    handler: src/functions/getUsers.handler
+    timeout: 100
+    events:
+      - http:
+          path: /users
+          method: get
+          cors:
+            origin: '*'
+          authorizer:
+            arn: ${param:cognito_arn}
+  getUser:
+    name: lambda-traveljournal-getUser
+    handler: src/functions/getUser.handler
+    events:
+      - http:
+          path: /users/{user}
+          method: get
+          cors:
+            origin: '*'
+          authorizer:
+            arn: ${param:cognito_arn}
+  createComments:
+    name: lambda-traveljournal-createComments
+    handler: src/functions/createComments.handler
+    events:
+      - http:
+          path: /comments
+          method: post
+          cors:
+            origin: '*'
+          authorizer:
+            arn: ${param:cognito_arn}
+  getUserComments:
+    name: lambda-traveljournal-getUserComments
+    handler: src/functions/getUserComments.handler
+    events:
+      - http:
+          path: /comments
+          method: get
+          cors:
+            origin: '*'
+          authorizer:
+            arn: ${param:cognito_arn}
+plugins:
+  - serverless-esbuild
+  - serverless-offline
